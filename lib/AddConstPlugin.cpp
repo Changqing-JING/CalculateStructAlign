@@ -3,22 +3,33 @@
 
 #include "CalculateAlign.hpp"
 
-void registerModuleAnalyses(llvm::ModuleAnalysisManager &MAM) {
+static inline void registerModuleAnalyses(llvm::ModuleAnalysisManager &MAM) {
   MAM.registerPass([] {
     return CalculateAlign::CalculateAlignAnalysis();
   });
 }
 
-bool registerModulePipeline(llvm::StringRef Name, llvm::ModulePassManager &MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
+static void inline addPassToMPM(llvm::ModulePassManager &MPM) {
+  MPM.addPass(CalculateAlign::CalculateAlignAnalysisPass());
+}
+
+static inline bool registerModulePipeline(llvm::StringRef Name, llvm::ModulePassManager &MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
   if (Name == "calculate-align") {
-    MPM.addPass(CalculateAlign::CalculateAlignAnalysisPass());
+    addPassToMPM(MPM);
     return true;
   }
   return false;
 }
 
-llvm::PassPluginLibraryInfo getAddConstPluginInfo() {
+static inline bool earlySimplificationCallback(llvm::ModulePassManager &MPM, llvm::OptimizationLevel level) {
+  static_cast<void>(level);
+  addPassToMPM(MPM);
+  return true;
+}
+
+static inline llvm::PassPluginLibraryInfo getAddConstPluginInfo() {
   return {LLVM_PLUGIN_API_VERSION, "CalculateAlign", LLVM_VERSION_STRING, [](llvm::PassBuilder &PB) {
+            PB.registerPipelineEarlySimplificationEPCallback(earlySimplificationCallback);
             PB.registerAnalysisRegistrationCallback(registerModuleAnalyses);
             PB.registerPipelineParsingCallback(registerModulePipeline);
           }};
